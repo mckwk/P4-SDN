@@ -1,4 +1,3 @@
 grpcio==1.59.3
 numpy
-scapy
-git+https://github.com/p4lang/tutorials.git@main#egg=p4runtime_lib&subdirectory=utils/p4runtime_lib
+-e /home/p4/tutorials/exercises/p4runtime/utils/p4runtime_lib
