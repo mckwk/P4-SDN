@@ -7,8 +7,7 @@ This project implements a packet forwarding logic using the P4 programming langu
 ## Setup Instructions
 1. **Clone the repository**:
    ```bash
-   git clone <repository-url>
-   cd p4-forwarding
+   git clone https://github.com/mckwk/P4-SDN
    ```
 
 2. **Install dependencies**:
