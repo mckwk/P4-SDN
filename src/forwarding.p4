@@ -4,79 +4,83 @@
 #include <core.p4>
 #include <v1model.p4>
 
-const bit<48> DEFAULT_MAC = 0x00:00:00:00:00:00;
+const bit<48> DEFAULT_MAC = 0x000000000000;
 
-parser start {
-    extract(hdr.ethernet);
-    return parse_eth;
+header ethernet_t {
+    bit<48> dstAddr;
+    bit<48> srcAddr;
+    bit<16> etherType;
 }
 
-parser parse_eth {
-    transition select(hdr.ethernet.etherType) {
-        0x0800: parse_ipv4; // IPv4
-        0x0806: parse_arp;  // ARP
-        default: ingress;    // Unknown type, drop
+struct headers {
+    ethernet_t ethernet;
+}
+
+struct metadata {
+}
+
+parser MyParser(packet_in pkt,
+                out headers hdr,
+                inout metadata meta,
+                inout standard_metadata_t standard_metadata) {
+    state start {
+        pkt.extract(hdr.ethernet);
+        transition select(hdr.ethernet.etherType) {
+            0x0800: parse_ipv4;
+            0x0806: accept;
+            default: accept;
+        }
+    }
+    state parse_ipv4 {
+        transition accept;
     }
 }
 
-control ingress {
+control MyIngress(inout headers hdr,
+                  inout metadata meta,
+                  inout standard_metadata_t standard_metadata) {
+
+    action drop() {
+        mark_to_drop();
+    }
+
+    action forward(bit<9> port) {
+        standard_metadata.egress_spec = port;
+    }
+
+    table forwarding_table {
+        key = {
+            hdr.ethernet.dstAddr: exact;
+        }
+        actions = {
+            drop;
+            forward;
+        }
+        size = 1024;
+        default_action = drop();
+    }
+
     apply {
         if (hdr.ethernet.isValid()) {
-            // Forwarding logic based on destination MAC address
             if (hdr.ethernet.dstAddr == DEFAULT_MAC) {
-                // Drop packet if destination MAC is the default
-                mark_to_drop();
+                drop();
             } else {
-                // Forward packet to the appropriate port
-                // (Assuming a simple forwarding logic for demonstration)
-                standard_metadata.egress_spec = get_port(hdr.ethernet.dstAddr);
+                forwarding_table.apply();
             }
         }
     }
 }
 
-action drop() {
-    // Action to drop the packet
-    mark_to_drop();
+control MyEgress(inout headers hdr,
+                 inout metadata meta,
+                 inout standard_metadata_t standard_metadata) {
+    apply { }
 }
 
-action forward(bit<9> port) {
-    // Action to forward the packet to a specific port
-    standard_metadata.egress_spec = port;
-}
-
-table forwarding_table {
-    key = {
-        hdr.ethernet.dstAddr: exact;
-    }
-    actions = {
-        drop;
-        forward;
-    }
-    default_action = drop();
-}
-
-control MyIngress {
+control MyDeparser(packet_out pkt, in headers hdr) {
     apply {
-        forwarding_table.apply();
+        pkt.emit(hdr.ethernet);
     }
 }
 
-control MyEgress {
-    apply {
-        // Egress processing logic (if any)
-    }
-}
-
-control MyDeparser {
-    apply {
-        // Deparser logic (if any)
-    }
-}
-
-package main {
-    MyParser parser;
-    MyIngress ingress;
-    MyEgress egress;
-    MyDeparser deparser;
-}
+V1Switch(MyParser(), MyIngress(), MyEgress(), MyDeparser()) main;
