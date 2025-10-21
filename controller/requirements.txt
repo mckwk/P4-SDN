@@ -1,5 +1,4 @@
-grpcio
-p4runtime-lib
+grpcio==1.59.3
 numpy
-time
-threading
+scapy
+git+https://github.com/p4lang/tutorials.git@main#egg=p4runtime_lib&subdirectory=utils/p4runtime_lib
