@@ -83,4 +83,12 @@ control MyDeparser(packet_out pkt, in headers hdr) {
     }
 }
 
-V1Switch(MyParser(), VerifyChecksum(), MyIngress(), MyEgress(), ComputeChecksum(), MyDeparser()) main;
+control NoVerify(inout headers hdr, inout metadata meta, inout standard_metadata_t standard_metadata) {
+    apply { }
+}
+
+control NoCompute(inout headers hdr, inout metadata meta, inout standard_metadata_t standard_metadata) {
+    apply { }
+}
+
+V1Switch(MyParser(), NoVerify(), MyIngress(), MyEgress(), NoCompute(), MyDeparser()) main;
