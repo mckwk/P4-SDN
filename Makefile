@@ -1,33 +1,18 @@
-# Makefile for P4 Forwarding Project
+CC = g++
+CFLAGS = -g -O2 -std=c++11
+P4C = p4c-bm
+P4_SRC = p4/path_switch.p4
+P4_INFO = path_switch.p4info
+BM_JSON = path_switch.json
 
-# Define the P4 compiler and the behavioral model simulator
-P4C = p4c
-BMV2 = bmv2
+all: build run
 
-# Define the source files
-SRC = src/forwarding.p4
-OUTPUT = build/forwarding.json
+build:
+	$(P4C) --json $(BM_JSON) --p4info-file $(P4_INFO) $(P4_SRC)
 
-# Define the test files
-TESTS = tests/test_forwarding.py
+run:
+	./tools/run_topology.sh & \
+	python3 controller/p4runtime_controller.py
 
-# Define the Python requirements
-REQUIREMENTS = requirements.txt
-
-# Default target
-all: compile
-
-# Compile the P4 program
-compile:
-	$(P4C) $(SRC) -o $(OUTPUT)
-
-# Clean up build artifacts
 clean:
-	rm -rf build/*
-	rm -f $(OUTPUT)
-
-# Install Python dependencies
-install:
-	pip install -r $(REQUIREMENTS)
-
-.PHONY: all compile clean install
+	rm -f $(BM_JSON) $(P4_INFO)
