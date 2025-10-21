@@ -41,7 +41,7 @@ control MyIngress(inout headers hdr,
                   inout standard_metadata_t standard_metadata) {
 
     action drop() {
-        mark_to_drop();
+        mark_to_drop(standard_metadata);
     }
 
     action forward(bit<9> port) {
@@ -83,4 +83,4 @@ control MyDeparser(packet_out pkt, in headers hdr) {
     }
 }
 
-V1Switch(MyParser(), MyIngress(), MyEgress(), MyDeparser()) main;
+V1Switch(MyParser(), VerifyChecksum(), MyIngress(), MyEgress(), ComputeChecksum(), MyDeparser()) main;
