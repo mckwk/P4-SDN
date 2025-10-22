@@ -1,3 +1,0 @@
-grpcio==1.59.3
-numpy
--e /home/p4/tutorials/exercises/p4runtime/utils/p4runtime_lib
