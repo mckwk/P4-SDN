@@ -11,12 +11,10 @@ from p4runtime_lib.switch import ShutdownAllSwitchConnections
 from p4runtime_lib.helper import P4InfoHelper
 from p4runtime_lib.error_utils import printGrpcError
 import p4runtime_lib.bmv2
+from paths import paths
 
 
 def modify_forwarding(switch, p4info_helper, dstAddr, dstMac, port):
-    """
-    Modifies the forwarding rule for a specific destination address on the switch.
-    """
     try:
         # Build the table entry
         table_entry = p4info_helper.buildTableEntry(
@@ -35,6 +33,21 @@ def modify_forwarding(switch, p4info_helper, dstAddr, dstMac, port):
         printGrpcError(e)
 
 
+def clear_forwarding(switch, p4info_helper, dstAddr):
+    try:
+        # Build the table entry to delete
+        table_entry = p4info_helper.buildTableEntry(
+            table_name="MyIngress.ipv4_lpm",
+            match_fields={"hdr.ipv4.dstAddr": (dstAddr, 32)},
+            action_name=None,
+            action_params={}
+        )
+
+        switch.DeleteTableEntry(table_entry)
+    except grpc.RpcError as e:
+        printGrpcError(e)
+
+
 def main(p4info_file_path, bmv2_file_path):
     p4info_helper = P4InfoHelper(p4info_file_path)
 
@@ -44,6 +57,11 @@ def main(p4info_file_path, bmv2_file_path):
             name='s1',
             address='127.0.0.1:50051',
             device_id=0,
+        )
+        s2 = p4runtime_lib.bmv2.Bmv2SwitchConnection(
+            name='s2',
+            address='127.0.0.1:50052',
+            device_id=1,
         )
         s3 = p4runtime_lib.bmv2.Bmv2SwitchConnection(
             name='s3',
@@ -67,38 +85,33 @@ def main(p4info_file_path, bmv2_file_path):
         )
 
         # Perform master arbitration and set pipeline configuration
-        for switch in [s1, s3, s4, s5, s6]:
-            switch.MasterArbitrationUpdate()
-            switch.SetForwardingPipelineConfig(p4info=p4info_helper.p4info, bmv2_json_file_path=bmv2_file_path)
-
-        # Define paths
-        paths = [
-            {  # Path P1
-                "s1": {"dstAddr": "10.0.2.2", "dstMac": "08:00:00:00:02:22", "port": 3},
-                "s3": {"dstAddr": "10.0.2.2", "dstMac": "08:00:00:00:02:22", "port": 3},
-                "s6": {"dstAddr": "10.0.2.2", "dstMac": "08:00:00:00:02:22", "port": 4}
-            },
-            {  # Path P2
-                "s1": {"dstAddr": "10.0.2.2", "dstMac": "08:00:00:00:02:22", "port": 2},
-                "s4": {"dstAddr": "10.0.2.2", "dstMac": "08:00:00:00:02:22", "port": 3},
-                "s5": {"dstAddr": "10.0.2.2", "dstMac": "08:00:00:00:02:22", "port": 3},
-                "s6": {"dstAddr": "10.0.2.2", "dstMac": "08:00:00:00:02:22", "port": 4}
-            },
-            {  # Path P3
-                "s1": {"dstAddr": "10.0.2.2", "dstMac": "08:00:00:00:02:22", "port": 2},
-                "s4": {"dstAddr": "10.0.2.2", "dstMac": "08:00:00:00:02:22", "port": 4},
-                "s6": {"dstAddr": "10.0.2.2", "dstMac": "08:00:00:00:02:22", "port": 4}
-            }
-        ]
+        for switch in [s1, s2, s3, s4, s5, s6]:
+            try:
+                switch.MasterArbitrationUpdate(election_id=(10, 0))
+                print(f"Master arbitration successful for {switch.name}")
+                switch.SetForwardingPipelineConfig(p4info=p4info_helper.p4info, bmv2_json_file_path=bmv2_file_path)
+            except grpc.RpcError as e:
+                print(f"Failed MasterArbitrationUpdate for {switch.name}")
+                printGrpcError(e)
 
         # Cycle through paths every 15 seconds
         path_index = 0
         while True:
-            print(f"Installing path P{path_index + 1}")
-            for switch_name, rule in paths[path_index].items():
+            print(f"Clearing current path P{path_index + 1}")
+            # Clear forwarding rules for the current path
+            for switch_name, dst_rules in paths[path_index].items():
                 switch = locals()[switch_name]
-                modify_forwarding(switch, p4info_helper, rule["dstAddr"], rule["dstMac"], rule["port"])
-            path_index = (path_index + 1) % len(paths)
+                for dst_ip in dst_rules.keys():
+                    clear_forwarding(switch, p4info_helper, dst_ip)
+
+            print(f"Installing path P{path_index + 1}")
+            # Install forwarding rules for the next path
+            for switch_name, dst_rules in paths[path_index].items():
+                switch = locals()[switch_name]
+                for dst_ip, rule in dst_rules.items():
+                    modify_forwarding(switch, p4info_helper, rule["dstAddr"], rule["dstMac"], rule["port"])
+
+            path_index = (path_index + 1) % len(paths)  # Move to the next path
             sleep(15)
 
     except KeyboardInterrupt:
