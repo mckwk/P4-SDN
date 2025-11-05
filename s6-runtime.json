@@ -1,0 +1,6 @@
+{
+  "target": "bmv2",
+  "p4info": "build/sdn_grpc.p4.p4info.txtpb",
+  "bmv2_json": "build/sdn_grpc.json",
+  "table_entries": []
+}
